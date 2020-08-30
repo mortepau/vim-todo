@@ -2,25 +2,12 @@ if exists("g:loaded_todo")
     finish
 endif
 
-if !exists('g:todo_indent')
-    let g:todo_indent = '\<TAB>'
-endif
-
-if !exists('g:todo_outdent')
-    let g:todo_outdent = '\<S-TAB>'
-endif
-
-if !exists('g:todo_open_below')
-    let g:todo_indent = 'o'
-endif
-
-if !exists('g:todo_open_above')
-    let g:todo_indent = 'O'
-endif
-
-if !exists('g:todo_toggle_completion')
-    let g:todo_toggle_completion = '\<CR>'
-endif
+let g:todo_indent = get(g:, 'todo_indent', '\<TAB>')
+let g:todo_outdent = get(g:, 'todo_outdent', '\<S-TAB>')
+let g:todo_open_below = get(g:, 'todo_open_below', 'o')
+let g:todo_open_above = get(g:, 'todo_open_above', 'O')
+let g:todo_toggle_completion = get(g:, 'todo_toggle_completion', '\<CR>')
+let g:stack = todo#stack#new()
 
 let s:save_cpo = &cpo
 set cpo&vim

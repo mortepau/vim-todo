@@ -11,7 +11,7 @@ endfunction
 
 function! todo#block#append(block, value)
     if !has_key(block, '__struct__') || dict.key !=? 'block'
-        return v:nil
+        return v:null
     endif
 
     let block = a:block
@@ -19,19 +19,12 @@ function! todo#block#append(block, value)
     return block
 endfunction
 
-function! todo#block#is_block(block)
-    if type(block) != v:t_dict
-        return v:false
-    endif
-    return !has_key(block, '__struct__') || block.__struct__ !=? 'block'
-endfunction
-
 function! todo#block#get_head(block)
     if !todo#block#is_block(block)
-        return v:nil
+        return v:null
     endif
     if !has_key(block, '__struct__')
-        return v:nil
+        return v:null
     endif
     let block = a:block
     if len(block.values) > 0
@@ -59,4 +52,11 @@ function! todo#block#remove_tail(block)
     let block = a:block
     let block.values = block.values[:-2]
     return block
+endfunction
+
+function! todo#block#valid(block)
+    if type(block) != v:t_dict
+        return v:false
+    endif
+    return !has_key(block, '__struct__') || block.__struct__ !=? 'block'
 endfunction

@@ -79,89 +79,92 @@ function! todo#indent(indent)
 endfunction
 
 function! todo#sort() range
-    call todo#init()
-    let lines = getline(a:firstline, a:lastline)
-    let indent = todo#get_num_indents(lines[0])
-    let linenr = a:firstline
-    let s:stack = []
-    let block = todo#new_block()
-
-    for value in lines
-        " Ignore empty lines
-        if match(value, "^\s*$") != -1
-            let linenr += 1
-            continue
-        endif
-
-        let line = {
-            \ 'line': value,
-            \ 'linenr': linenr,
-            \ 'indent': todo#get_num_indents(value),
-            \ 'active': match(value, s:active_regex) != -1,
-            \ 'status': todo#get_line_status(value)
-        \ }
-
-        if line.indent > indent
-            if len(block) > 0
-                call todo#stack_push(block)
-            endif
-            let block = todo#block_new()
-            let block = todo#block_append(block, line)
-            " let block = [line]
-            let indent = line.indent
-        elseif line.indent < indent
-            while len(stack) > 0
-                let previous_block = todo#stack_pop()
-                let previous_line = todo#block_get_head(previous_block)
-                let block_line = todo#block_get_head(block)
-                if previous_line.indent < block_line.indent
-                    let previous_block = todo#block_append(previous_block, block)
-                    let block = previous_block
-                elseif previous_line.indent == block_line.indent
-                    call todo#stack_push(previous_block)
-                endif
-            endwhile
-            call todo#stack_push(block)
-            let block = [line]
-            let indent = line.indent
-        else
-            let block += [line]
-        endif
-        let linenr += 1
-    endfor
-    if len(block) > 0
-        " let stack += block
-        call todo#stack_push(block)
-    endif
-
-    echo s:stack
+    echo "Sorting"
     return
 
-    function! s:sort(line_dict)
-        let changed = v:true
-        while changed
-            let changed = v:false
-            let prev_linenr = -1
-            for [linenr, struct] in items(a:line_dict)
-                if prev_linenr != -1
-                    let prev_struct = a:line_dict[prev_linenr]
-                    let active_condition = (prev_struct.active < struct.active) || (prev_struct.active == struct.active)
-                    let status_condition = struct.status < prev_struct.status 
-                    if active_condition && status_condition
-                        let tmp = a:line_dict[prev_linenr]
-                        let a:line_dict[prev_linenr] = a:line_dict[linenr]
-                        let a:line_dict[linenr] = tmp
-                        let changed = v:true
-                    endif
-                endif
-                let prev_linenr = linenr
-            endfor
-        endwhile
-        return a:line_dict
-    endfunction
-    for [linenr, struct] in items(line_dict)
-        call setline(linenr, struct.line)
-    endfor
+"     call todo#init()
+"     let lines = getline(a:firstline, a:lastline)
+"     let indent = todo#get_num_indents(lines[0])
+"     let linenr = a:firstline
+"     let s:stack = []
+"     let block = todo#new_block()
+
+"     for value in lines
+"         " Ignore empty lines
+"         if match(value, "^\s*$") != -1
+"             let linenr += 1
+"             continue
+"         endif
+
+"         let line = {
+"             \ 'line': value,
+"             \ 'linenr': linenr,
+"             \ 'indent': todo#get_num_indents(value),
+"             \ 'active': match(value, s:active_regex) != -1,
+"             \ 'status': todo#get_line_status(value)
+"         \ }
+
+"         if line.indent > indent
+"             if len(block) > 0
+"                 call todo#stack_push(block)
+"             endif
+"             let block = todo#block_new()
+"             let block = todo#block_append(block, line)
+"             " let block = [line]
+"             let indent = line.indent
+"         elseif line.indent < indent
+"             while len(stack) > 0
+"                 let previous_block = todo#stack_pop()
+"                 let previous_line = todo#block_get_head(previous_block)
+"                 let block_line = todo#block_get_head(block)
+"                 if previous_line.indent < block_line.indent
+"                     let previous_block = todo#block_append(previous_block, block)
+"                     let block = previous_block
+"                 elseif previous_line.indent == block_line.indent
+"                     call todo#stack_push(previous_block)
+"                 endif
+"             endwhile
+"             call todo#stack_push(block)
+"             let block = [line]
+"             let indent = line.indent
+"         else
+"             let block += [line]
+"         endif
+"         let linenr += 1
+"     endfor
+"     if len(block) > 0
+"         " let stack += block
+"         call todo#stack_push(block)
+"     endif
+
+"     echo s:stack
+"     return
+
+"     function! s:sort(line_dict)
+"         let changed = v:true
+"         while changed
+"             let changed = v:false
+"             let prev_linenr = -1
+"             for [linenr, struct] in items(a:line_dict)
+"                 if prev_linenr != -1
+"                     let prev_struct = a:line_dict[prev_linenr]
+"                     let active_condition = (prev_struct.active < struct.active) || (prev_struct.active == struct.active)
+"                     let status_condition = struct.status < prev_struct.status 
+"                     if active_condition && status_condition
+"                         let tmp = a:line_dict[prev_linenr]
+"                         let a:line_dict[prev_linenr] = a:line_dict[linenr]
+"                         let a:line_dict[linenr] = tmp
+"                         let changed = v:true
+"                     endif
+"                 endif
+"                 let prev_linenr = linenr
+"             endfor
+"         endwhile
+"         return a:line_dict
+"     endfunction
+"     for [linenr, struct] in items(line_dict)
+"         call setline(linenr, struct.line)
+"     endfor
 endfunction
 
 function! todo#get_line_status(line)
@@ -223,22 +226,9 @@ function! todo#get_num_indents(line)
     return indents
 endfunction
 
-function! todo#stack_push(value)
-    let s:stack += [a:value]
-endfunction
+function! todo#test()
+    let b:stack = todo#stack#new()
+    let b:block = todo#block#new()
 
-function! todo#stack_pop()
-    let v = s:stack[-1]
-    let stack = s:stack[:-2]
-    return v
-endfunction
-
-function! todo#test(...)
-    if len(a:000) > 0
-        for x in a:000
-            echo x
-        endfor
-    else
-        echo "No arguments"
-    endif
+    call todo#stack#push(1,2,3)
 endfunction
