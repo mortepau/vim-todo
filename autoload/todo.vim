@@ -7,67 +7,46 @@ function! todo#new_above()
 endfunction
 
 function! todo#toggle_completion()
-    call todo#init()
-    let line = getline('.')
-    let num_indents = todo#get_num_indents(line)
-    let marker_pos = num_indents * todo#get_indent_size() + 1
+    let linestring = getline('.')
+    let linenr = line('.')
+    let line = todo#line#new(linestring, linenr)
 
-    let complete   = match(line, s:complete_regex) != -1
-    let incomplete = match(line, s:incomplete_regex) != -1
-    let partial    = match(line, s:partial_regex) != -1
-    let active     = match(line, s:active_regex) != -1
-
-    if complete
-        let marker = ' '
-    elseif incomplete
-        let marker = '/'
-    elseif partial
-        " If completing an active task, deactivate it
-        if active
-            call todo#toggle_active()
-            let line = getline('.')
-            let active = v:false
-        endif
-        let marker = 'x'
-    else
+    if !todo#util#is_task(line.value)
         return
     endif
 
-    if active
-        let marker_pos += 1
-    endif
-    let new_line = line[0:marker_pos-1] . marker . line[marker_pos+1:]
-    call setline('.', new_line)
+    " Update the marker based on the map in g:todo_completion_next_state
+    let old_marker = copy(line.marker)
+    call todo#marker#set_value(line.marker, g:todo_completion_next_state[line.marker.value])
+
+    let new_line = line.value[0:old_marker.start-1] . line.marker.value . line.value[old_marker.end+1:]
+
+    call todo#line#write(line, new_line)
+    call todo#line#draw(line)
 endfunction
 
 function! todo#toggle_active()
-    call todo#init()
-    let line = getline('.')
-    let complete   = match(line, s:complete_regex) != -1
-    let incomplete = match(line, s:incomplete_regex) != -1
-    let partial    = match(line, s:partial_regex) != -1
-    let active     = match(line, s:active_regex) != -1
+    let linestring = getline('.')
+    let linenr = line('.')
+    let line = todo#line#new(linestring, linenr)
 
     " Return if not a task
-    if !complete && !incomplete && !partial
+    if !todo#util#is_task(line.value)
         return
     endif
 
     " Return if trying to make a complete task active
-    if complete && !active
+    if !line.status && g:todo_integer_to_completion[line.completion] ==? 'complete'
         return
     endif
 
-    let marker_pos = todo#get_num_indents(line) * todo#get_indent_size() + 1
+    let old_marker = copy(line.marker)
+    call todo#marker#set_value(line.marker, g:todo_active_next_state[line.marker.value])
 
-    if active
-        let marker_pos += 1
-        let new_line = line[0:marker_pos-2] . line[marker_pos] . line[marker_pos+2:]
-    else
-        let new_line = line[0:marker_pos-1] .'(' . line[marker_pos] . ')' . line[marker_pos+1:]
-    endif
+    let new_line = line.value[0:old_marker.start-1] . line.marker.value . line.value[old_marker.end+1:]
 
-    call setline('.', new_line)
+    call todo#line#write(line, new_line)
+    call todo#line#draw(line)
 endfunction
 
 function! todo#indent(indent)
@@ -82,7 +61,6 @@ function! todo#sort() range
     echo "Sorting"
     return
 
-"     call todo#init()
 "     let lines = getline(a:firstline, a:lastline)
 "     let indent = todo#get_num_indents(lines[0])
 "     let linenr = a:firstline
@@ -185,50 +163,4 @@ function! todo#get_line_status(line)
     else
         return 3
     endif
-endfunction
-
-" UTILITY FUNCTIONS
-
-function! todo#init()
-    if exists('s:todo_init')
-        return
-    endif
-    let s:complete_regex   = '^\s*\[\((x)\|x\)\] - .*$'
-    let s:partial_regex    = '^\s*\[\((/)\|/\)\] - .*$'
-    let s:incomplete_regex = '^\s*\[\(( )\| \)\] - .*$'
-    let s:active_regex     = '^\s*\[(\(x\|/\| \))\] - .*$'
-    let s:header_regex     = '^/s*[^#[].*'
-    let s:comment_regex    = '#.*'
-    let s:todo_init = 1
-endfunction
-
-function! todo#get_indent_size()
-    if &shiftwidth > 0 && &expandtab
-        return &shiftwidth
-    else
-        return &tabstop
-    endif
-endfunction
-
-function! todo#get_num_indents(line)
-    " Empty line
-    if match(a:line, '^\s*$') == 0
-        return 0
-    endif
-    let indent_size = todo#get_indent_size()
-    let indents = 0
-    let index = 0
-    while (match(a:line[index:index+indent_size-1], '\s\{' . indent_size . '\}') != -1)
-        let index += indent_size
-        let indents += 1
-    endwhile
-
-    return indents
-endfunction
-
-function! todo#test()
-    let b:stack = todo#stack#new()
-    let b:block = todo#block#new()
-
-    call todo#stack#push(1,2,3)
 endfunction

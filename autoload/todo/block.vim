@@ -1,62 +1,77 @@
-function! todo#block#new(...)
-    let values = []
-    if len(a:000) > 0
-        for v in a:000
-            let values += [v]
-        endfor
-    endif
-    let block = {'values': values, '__struct__': 'block'}
+function! todo#block#new()
+    let block = {
+        \ '__struct__': 'block',
+        \ 'values': []
+        \ }
     return block
 endfunction
 
-function! todo#block#append(block, value)
-    if !has_key(block, '__struct__') || dict.key !=? 'block'
-        return v:null
+function! todo#block#insert(block, value, ...)
+    " Check if block is valid
+    if !todo#block#valid(a:block)
+        echo "Invalid block"
+        return
     endif
 
-    let block = a:block
-    let block.values += [a:value]
-    return block
-endfunction
-
-function! todo#block#get_head(block)
-    if !todo#block#is_block(block)
-        return v:null
-    endif
-    if !has_key(block, '__struct__')
-        return v:null
-    endif
-    let block = a:block
-    if len(block.values) > 0
-        let values = block.values
-        while type(values) == v:t_list
-            let values = values[0]
-        endwhile
-        return values
+    " Check if index is given as parameter
+    if a:0 == 1
+        echo "Valid index"
+        let index = todo#block#clamp(a:block, a:1)
     else
-        return block
+        " Insert at tail
+        echo "Insert at tail"
+        let index = len(a:block.values)
     endif
-        
-    if len()
-    if len(a:list) == 0
-        return a:list
-    endif
-    let l = a:list
-    while type(l) == v:t_list
-        let l = l[0]
-    endwhile
-    return l
+
+    call insert(a:block.values, a:value, index)
 endfunction
 
-function! todo#block#remove_tail(block)
-    let block = a:block
-    let block.values = block.values[:-2]
-    return block
+function! todo#block#remove(block, ...)
+    " Check if block is valid
+    if !todo#block#valid(a:block)
+        echo "Invalid block"
+        return v:null
+    endif
+
+    " Check if index is given as parameter
+    if a:0 == 1
+        echo "Valid index"
+        let index = todo#block#clamp(a:block, a:1)
+    else
+        " Remove tail
+        echo "Removing tail"
+        let index = len(a:block.values) - 1
+    endif
+
+    " Check if the block isn't empty
+    if !todo#block#empty(a:block)
+        echo "Removing entry from block"
+        return remove(a:block.values, index)
+    else
+        echo "Invalid size on block"
+        return v:null
+    endif
+endfunction
+
+function! todo#block#head(block)
+    return a:block.values[0]
+endfunction
+
+function! todo#block#tail(block)
+    return a:block.values[-1]
 endfunction
 
 function! todo#block#valid(block)
-    if type(block) != v:t_dict
+    if type(a:block) != v:t_dict
         return v:false
     endif
-    return !has_key(block, '__struct__') || block.__struct__ !=? 'block'
+    return has_key(a:block, '__struct__') && a:block.__struct__ ==? 'block'
+endfunction
+
+function! todo#block#empty(block)
+    return len(a:block.values) == 0
+endfunction
+
+function! todo#block#clamp(block, index)
+    return max([0, min([a:index, len(a:block.values) - 1])])
 endfunction

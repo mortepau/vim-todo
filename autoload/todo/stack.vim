@@ -8,34 +8,41 @@ endfunction
 
 function! todo#stack#push(...)
     if a:0 == 0
+        " No input
         return
     endif
-        if todo#stack#valid(a:1)
-            for arg in a:000[1:]
-                echo "Pushing " . arg . " onto a:1"
-                call add(a:1.values, arg)
-            endfor
-        else
-            if !exists('b:stack')
-                echo "Creating b:stack"
-                let b:stack = todo#stack#new()
-            endif
-            for arg in a:000
-                echo "Pushing " . arg . " onto b:stack.values"
-                call add(b:stack.values, arg)
-            endfor
+    if todo#stack#valid(a:1)
+        let stack = a:1
+        let args = a:000[1:]
+    else
+        " Create b:stack if it doesn't exist
+        if !exists('b:stack')
+            let b:stack = todo#stack#new()
         endif
+        let stack = b:stack
+        let args = a:000
+    endif
+    for arg in args
+        call add(stack.values, arg)
+    endfor
 endfunction
 
 function! todo#stack#pop(...)
-    if a:0 == 0
-        let val = remove(b:stack.values, -1)
+    if a:0 == 0 && exists('b:stack')
+        let stack = b:stack
     elseif a:0 == 1 && todo#stack#valid(a:1)
-        let val = remove(a:1.values, -1)
+        let stack = a:1
     else
-        let val = v:null
+        " Wrong number of arguments or invalid stack
+        return v:null
     endif
-    return val
+    if !todo#stack#empty(stack)
+        let val = remove(stack.values, -1)
+        return val
+    else
+        " Stack is empty
+        return v:null
+    endif
 endfunction
 
 function! todo#stack#valid(stack)
@@ -45,16 +52,6 @@ function! todo#stack#valid(stack)
     return has_key(a:stack, '__struct__') && a:stack.__struct__ ==? 'stack'
 endfunction
 
-function! todo#stack#popp(...)
-    if a:0 > 0
-        if !todo#stack#valid(a:1)
-            echo a:1
-            return v:null
-        endif
-        let val = remove(a:1.values, -1)
-        return val
-    else
-        let val = remove(b:stack.values, -1)
-        return val
-    endif
+function! todo#stack#empty(stack)
+    return len(stack.values) == 0
 endfunction
