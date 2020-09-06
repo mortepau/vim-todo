@@ -1,33 +1,78 @@
+" Create a new line below the current one with template task
 function! todo#new_below()
-    call feedkeys("o[ ] - ", 'n')
+    let cmd = g:todo_keymap['open_below'] . "[ ] - "
+    call feedkeys(cmd, 'n')
 endfunction
 
+" Create a new line above the current one with template task
 function! todo#new_above()
-    call feedkeys("O[ ] - ", 'n')
+    let cmd = g:todo_keymap['open_above'] . "[ ] - "
+    call feedkeys(cmd, 'n')
 endfunction
 
-function! todo#toggle_completion()
-    let linestring = getline('.')
-    let linenr = line('.')
-    let line = todo#line#new(linestring, linenr)
+" Create a template task if the current line only contains the word new.
+" Used in combination with iabbrev command
+function! todo#new_task()
+    " If line only contains the word 'new'
+    if match(getline('.'), '^\s*new$') == 0
+        return "[ ] -"
+    endif
+    " Fallback to insert abbrev value
+    return "new"
+endfunction
 
-    if !todo#util#is_task(line.value)
+" Create a template task below the current one if the current line has content
+" not matching an empty task, otherwise clear the current content and
+" move to the line below
+function! todo#new_line()
+    " If not at the end of line, return
+    if !todo#util#eol()
+        let cmd = g:todo_keymap['new_line']
+        call feedkeys(cmd, 'n')
         return
     endif
+    let line = getline('.')
 
-    " Update the marker based on the map in g:todo_completion_next_state
-    let old_marker = copy(line.marker)
-    call todo#marker#set_value(line.marker, g:todo_completion_next_state[line.marker.value])
-
-    let new_line = line.value[0:old_marker.start-1] . line.marker.value . line.value[old_marker.end+1:]
-
-    call todo#line#write(line, new_line)
-    call todo#line#draw(line)
+    if match(line, '^\s*\[ \] -\s*$') == 0
+        call setline('.', "")
+        call feedkeys("\<CR>", 'n')
+    else
+        call feedkeys("\<ESC>", 'n')
+        call todo#new_below()
+    endif
 endfunction
 
-function! todo#toggle_active()
+" Go to the next completion state if the current line matches a task
+function! todo#toggle_completion() range
+    for linenr in range(a:firstline, a:lastline)
+        let linestring = getline(linenr)
+        " Create a line object with the given string and linenr
+        let line = todo#line#new(linestring, linenr)
+
+        " If the current line isn't a task, continue
+        if !todo#util#is_task(line.value)
+            continue
+        endif
+
+        " Update the marker based on the map in g:todo_next_state
+        let old_marker = copy(line.marker)
+        call todo#marker#set_value(line.marker, g:todo_next_state.completion[line.marker.value])
+
+        let new_line = line.value[0:old_marker.start-1] . line.marker.value . line.value[old_marker.end+1:]
+
+        " Update the string value in the line object
+        call todo#line#write(line, new_line)
+        " Draw it onto the screen
+        call todo#line#draw(line)
+    endfor
+endfunction
+
+" Toggle the current line's status, next status is based on
+" g:todo_next_state.status dictionary
+function! todo#toggle_status()
     let linestring = getline('.')
     let linenr = line('.')
+    " Create a line object with the given string and linenr
     let line = todo#line#new(linestring, linenr)
 
     " Return if not a task
@@ -35,132 +80,113 @@ function! todo#toggle_active()
         return
     endif
 
-    " Return if trying to make a complete task active
-    if !line.status && g:todo_integer_to_completion[line.completion] ==? 'complete'
+    " Return if trying to make a closed task active
+    if !line.status && line.kind ==? 'closed'
         return
     endif
 
+    " Update the marker based on the map in g:todo_next_state
     let old_marker = copy(line.marker)
-    call todo#marker#set_value(line.marker, g:todo_active_next_state[line.marker.value])
+    call todo#marker#set_value(line.marker, g:todo_next_state.status[line.marker.value])
 
     let new_line = line.value[0:old_marker.start-1] . line.marker.value . line.value[old_marker.end+1:]
 
+    " Update the string value in the line object
     call todo#line#write(line, new_line)
+    " Draw it onto the screen
     call todo#line#draw(line)
 endfunction
 
-function! todo#indent(indent)
-    if a:indent
-        call feedkeys('>>', 'n')
-    else
-        call feedkeys('<<', 'n')
+" Indent or outdent the range of lines given.
+" Works in normal, visual and insert mode
+" @indent: flag indicating to indent or outdent
+" @mode: mode when executing function
+function! todo#indent(indent, mode) range
+    " If not at the end of line, fall back to normal behaviour
+    if !todo#util#eol() && a:mode ==? 'i'
+        let cmd = a:indent ? g:todo_keymap['indent'] : g:todo_keymap['outdent']
+        call feedkeys(cmd, 'n')
+        return
+    endif
+    let save_cursor = getcurpos()
+    " If we are in insert mode, exit it
+    if a:mode ==? 'i'
+        call feedkeys("\<ESC>", 'n')
+    endif
+    " Set direction based on key pressed
+    let dir = a:indent ? '>>' : '<<'
+    for linenr in range(a:firstline, a:lastline)
+        let cmd = linenr . 'gg' . dir
+        call feedkeys(cmd, 'n')
+    endfor
+    call setpos('.', save_cursor)
+    " If we are in insert mode, move to the end of line and enter insert mode
+    if a:mode ==? 'i'
+        call feedkeys("A", "n")
     endif
 endfunction
 
 function! todo#sort() range
-    echo "Sorting"
-    return
+    " Get the line contents and linenrs from the range given
+    let linestrings = getline(a:firstline, a:lastline)
+    let linenrs = range(a:firstline, a:lastline)
 
-"     let lines = getline(a:firstline, a:lastline)
-"     let indent = todo#get_num_indents(lines[0])
-"     let linenr = a:firstline
-"     let s:stack = []
-"     let block = todo#new_block()
+    " Initialize the stack and current block
+    let line_blocks = []
+    let lines_at_indent = []
+    let indent = -1
 
-"     for value in lines
-"         " Ignore empty lines
-"         if match(value, "^\s*$") != -1
-"             let linenr += 1
-"             continue
-"         endif
+    " Create line objects for each line in the range given
+    for index in range(len(linenrs))
+        " Convert the linestring and linenr to a line object
+        let line = todo#line#new(linestrings[index], linenrs[index]) 
 
-"         let line = {
-"             \ 'line': value,
-"             \ 'linenr': linenr,
-"             \ 'indent': todo#get_num_indents(value),
-"             \ 'active': match(value, s:active_regex) != -1,
-"             \ 'status': todo#get_line_status(value)
-"         \ }
+        if line.kind ==? 'empty'
+            continue
+        endif
 
-"         if line.indent > indent
-"             if len(block) > 0
-"                 call todo#stack_push(block)
-"             endif
-"             let block = todo#block_new()
-"             let block = todo#block_append(block, line)
-"             " let block = [line]
-"             let indent = line.indent
-"         elseif line.indent < indent
-"             while len(stack) > 0
-"                 let previous_block = todo#stack_pop()
-"                 let previous_line = todo#block_get_head(previous_block)
-"                 let block_line = todo#block_get_head(block)
-"                 if previous_line.indent < block_line.indent
-"                     let previous_block = todo#block_append(previous_block, block)
-"                     let block = previous_block
-"                 elseif previous_line.indent == block_line.indent
-"                     call todo#stack_push(previous_block)
-"                 endif
-"             endwhile
-"             call todo#stack_push(block)
-"             let block = [line]
-"             let indent = line.indent
-"         else
-"             let block += [line]
-"         endif
-"         let linenr += 1
-"     endfor
-"     if len(block) > 0
-"         " let stack += block
-"         call todo#stack_push(block)
-"     endif
+        " Initialize if not done
+        if indent == -1
+            let indent = line.indent
+        endif
 
-"     echo s:stack
-"     return
+        if line.indent > indent
+            " Push block onto stack if it has content
+            if !empty(lines_at_indent)
+                call add(line_blocks, lines_at_indent)
+            endif
+            let lines_at_indent = []
+            call add(lines_at_indent, line)
 
-"     function! s:sort(line_dict)
-"         let changed = v:true
-"         while changed
-"             let changed = v:false
-"             let prev_linenr = -1
-"             for [linenr, struct] in items(a:line_dict)
-"                 if prev_linenr != -1
-"                     let prev_struct = a:line_dict[prev_linenr]
-"                     let active_condition = (prev_struct.active < struct.active) || (prev_struct.active == struct.active)
-"                     let status_condition = struct.status < prev_struct.status 
-"                     if active_condition && status_condition
-"                         let tmp = a:line_dict[prev_linenr]
-"                         let a:line_dict[prev_linenr] = a:line_dict[linenr]
-"                         let a:line_dict[linenr] = tmp
-"                         let changed = v:true
-"                     endif
-"                 endif
-"                 let prev_linenr = linenr
-"             endfor
-"         endwhile
-"         return a:line_dict
-"     endfunction
-"     for [linenr, struct] in items(line_dict)
-"         call setline(linenr, struct.line)
-"     endfor
-endfunction
+            " Create a new block and insert the current line
+        elseif line.indent < indent
+            call add(line_blocks, lines_at_indent)
 
-function! todo#get_line_status(line)
-    let complete = match(a:line, s:complete_regex) != -1
-    let incomplete = match(a:line, s:incomplete_regex) != -1
-    let partial = match(a:line, s:partial_regex) != -1
-    let header = match(a:line, s:header_regex) != -1
-    let comment = match(a:line, s:comment_regex) != -1
+            call todo#line#rearrange(line_blocks)
 
-    if header || comment
-        return -1
-    elseif complete
-        return 0
-    elseif partial
-        return 1
-    elseif incomplete
-        return 2
-    else
-        return 3
+            let lines_at_indent = []
+            call add(lines_at_indent, line)
+        else
+            " Insert line if their indents are equal
+            call add(lines_at_indent, line)
+        endif
+        let indent = line.indent
+    endfor
+    if !empty(lines_at_indent)
+        call add(line_blocks, lines_at_indent)
+        call todo#line#rearrange(line_blocks)
     endif
+
+    let l = line_blocks
+    let line_blocks = []
+    for ll in l
+        call extend(line_blocks, ll)
+    endfor
+    
+    call todo#line#sort(line_blocks)
+    call todo#line#print(line_blocks)
+
+    for line in line_blocks
+        call todo#line#draw(line)
+    endfor
 endfunction

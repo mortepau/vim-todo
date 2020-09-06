@@ -13,24 +13,34 @@ endif
 let s:cpo_save = &cpo
 set cpo&vim
 
-syntax match todoComment          '#.*'
-syntax match todoHeader           '^\s*[^#[].*'       contains=todoComment
-syntax match todoIncomplete       '^\s*\[ \] - .*$'   contains=todoComment
-syntax match todoIncompleteActive '^\s*\[( )\] - .*$' contains=todoComment containedin=todoIncomplete
-syntax match todoPartial          '^\s*\[/\] - .*$'   contains=todoComment
-syntax match todoPartialActive    '^\s*\[(/)\] - .*$' contains=todoComment containedin=todoPartial
-syntax match todoComplete         '^\s*\[x\] - .*$'   contains=todoComment
-syntax match todoCompleteActive   '^\s*\[(x)\] - .*$' contains=todoComment containedin=todoComplete
-" syntax match todoActive '^\s*\[(\(x\|/\| \))\] - .*$' contains=todoComment containedin=todoIncomplete,todoComplete,todoPartial
+syntax match todoHeader '^[\(x\|/\| \|(x)\|(/)\|( )\)] -\s\+'
 
-hi def link todoHeader           Statement
-hi def link todoComment          Comment
-hi def link todoComplete         Comment
-hi def link todoCompleteActive   Comment
-hi def link todoIncomplete       Normal
-hi def link todoIncompleteActive String
-hi def link todoPartial          Special
-hi def link todoPartialActive    Constant
+syntax match todoTickOpen    '^\s*\zs\[ \] -\ze'   conceal
+syntax match todoTickPartial '^\s*\zs\[/\] -\ze'   conceal
+syntax match todoTickClosed  '^\s*\zs\[x\] -\ze'   conceal
+syntax match todoTickActive  '^\s*\zs\[( )\] -\ze' conceal
+syntax match todoTickActive  '^\s*\zs\[(/)\] -\ze' conceal
+syntax match todoTickActive  '^\s*\zs\[(x)\] -\ze' conceal
+syntax match todoTickHeader  '^\zs\[\(( )\|(/)\| \|/\)\] -\ze' conceal
+
+syntax region todoTaskOpen    matchgroup=todoTickOpen    start='\[\( \|( )\)\] -\s\+'    end='$' concealends
+syntax region todoTaskPartial matchgroup=todoTickPartial start='\[\(/\|(/)\)\] -\s\+'    end='$' concealends
+syntax region todoTaskClosed  matchgroup=todoTickClosed  start='\[\(x\|(x)\)\] -\s\+'    end='$' concealends
+syntax region todoTaskActive  matchgroup=todoTickActive  start='\[(\(x\|/\| \))\] -\s\+' end='$' concealends
+syntax region todoTaskHeader  matchgroup=todoTickHeader  start='^\[\(\(/\| \)\|\(( )\|(/)\)\)\] -\s\+'    end='$' concealends
+
+highlight def link todoTaskHeader Statement
+highlight def link todoTickHeader Statement
+
+highlight def link todoTaskOpen Ignore
+highlight def link todoTickOpen Ignore
+highlight def link todoTaskPartial Type
+highlight def link todoTickPartial Type
+highlight def link todoTaskClosed Comment
+highlight def link todoTickClosed Comment
+highlight def link todoTaskActive Identifier
+highlight def link todoTickActive Identifier
+
 
 let b:current_syntax = "todo"
 
