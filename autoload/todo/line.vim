@@ -1,151 +1,90 @@
 function! todo#line#new(line, linenr)
-    let indent = todo#line#find_indent(a:line)
-    let status = todo#line#find_status(a:line)
-    let kind = todo#line#find_kind(a:line)
+    let empty = match(a:line, '^\s*$' ) != -1
+    let open = match(a:line, "\\V" . g:todo_completion_templates.open) != -1
+    let closed = match(a:line, "\\V" . g:todo_completion_templates.closed) != -1
+    let partial = g:todo_enable_partial_completion && match(a:line, "\\V" . g:todo_completion_templates.partial) != -1
+
+    if g:todo_enable_active_status
+        let active = match(a:line, "\\V" . g:todo_completion_templates.active . g:todo_completion_templates.open) != -1
+        if g:todo_enable_partial_completion
+            let active = active || match(a:line, "\\V" . g:todo_completion_templates.active . g:todo_completion_templates.partial) != -1
+        endif
+        let active = active || match(a:line, "\\V" . g:todo_completion_templates.active . g:todo_completion_templates.closed) != -1
+    else
+        let active = v:false
+    endif
+    let indent = empty ? 0 : indent(a:linenr) / shiftwidth()
+
+    if open
+        let kind = 'open'
+    elseif closed
+        let kind = 'closed'
+    elseif partial
+        let kind = 'partial'
+    elseif active
+        let kind = 'active'
+    elseif empty
+        let kind = 'empty'
+    else
+        let kind = 'other'
+    endif
+
     let line = {
         \ '__struct__': 'line',
         \ 'value': a:line,
         \ 'linenr': a:linenr,
         \ 'indent': indent,
         \ 'kind': kind,
-        \ 'status': status,
-        \ 'marker': todo#marker#new(),
+        \ 'status': active,
         \ 'children': [],
         \ 'num_children': 0,
+        \ 'parent': -1,
+        \ 'progress': 0,
         \ }
-    call todo#line#find_marker(line)
+
     return line
 endfunction
 
-function! todo#line#find_indent(line)
-    let line = todo#line#to_string(a:line)
-    if todo#util#is_empty(line)
-        return 0
-    endif
-    let indent_size = todo#util#get_indent_size()
-    let indents = 0
-    let index = 0
-    while (match(line[index:index+indent_size-1], '\s\{' . indent_size . '\}') != -1)
-        let index += indent_size
-        let indents += 1
-    endwhile
-    return indents
-endfunction
+function! todo#line#build(lines)
+    let line_indents = {}
+    let indent = 0
 
-function! todo#line#find_status(line)
-    let line = todo#line#to_string(a:line)
-    return todo#util#is_active(line)
-endfunction
-
-function! todo#line#find_kind(line)
-    let line = todo#line#to_string(a:line)
-    if todo#util#is_closed(line)
-        let v = 'closed'
-    elseif todo#util#is_partial(line)
-        let v = 'partial'
-    elseif todo#util#is_open(line)
-        let v = 'open'
-    elseif todo#util#is_empty(line)
-        let v = 'empty'
-    else
-        let v = 'other'
-    endif
-    return v
-endfunction
-
-function! todo#line#find_marker(line)
-    " Do nothing if the current line is not a task
-    if a:line.kind ==? 'empty' || a:line.kind ==? 'other'
-        return
-    endif
-    let value = g:todo_conversion_table['marker'][a:line.kind]
-    if a:line.status
-        let value = '(' . value . ')'
-    endif
-
-    let start = a:line.indent * todo#util#get_indent_size() + 1
-
-    call todo#marker#set_value(a:line.marker, value)
-    call todo#marker#set_start(a:line.marker, start)
-endfunction
-
-function! todo#line#insert_child(line, child)
-    if todo#line#valid(a:line)
-        call add(a:line.children, a:child)
-        let a:line.num_children += 1
-        let a:line.num_children += a:child.num_children
-    endif
-endfunction
-
-function! todo#line#has_children(line)
-    if todo#line#valid(a:line)
-        return a:line.num_children > 0
-    endif
-    return v:false
-endfunction
-
-function! todo#line#num_children(line)
-    if todo#line#valid(a:line)
-        return len(a:line.children)
-    endif
-    return 0
-endfunction
-
-function! todo#line#rearrange(lines)
-    let block = remove(a:lines, -1)
-    while !empty(a:lines)
-        let pblock = remove(a:lines, -1)
-        if block[-1].indent > pblock[-1].indent
-            for element in block
-                call todo#line#insert_child(pblock[-1], element)
-            endfor
-        elseif block[-1].indent < pblock[-1].indent
-            if todo#line#has_children(pblock[-1])
-                let potential_parent = block[-1]
-                for child in pblock[-1].children
-                    if child.indent == pblock.indent
-                        let potential_parent = child
-                    endif
-                endfor
-                for element in pblock
-                    call todo#line#insert_child(potential_parent, element)
-                endfor
-            endif
-        else
-            call add(a:lines, pblock)
-            break
+    for line in a:lines
+        " No need to insert empty lines into the node tree
+        if line.kind ==? 'empty'
+            continue
         endif
-        let block = pblock
-    endwhile
-    call add(a:lines, block)
-endfunction
 
-function! todo#line#to_string(line)
-    if todo#line#valid(a:line)
-        return a:line.value
-    else
-        return a:line
-    endif
-endfunction
+        " Insert line in the dictionary at the key matching their indent,
+        " this ensures that we can always find the parent using their indent
+        if has_key(line_indents, line.indent)
+            let line_indents[line.indent] += [line]
+        else
+            let line_indents[line.indent] = [line]
+        endif
 
-function! todo#line#write(line, string)
-    if todo#line#valid(a:line)
-        let new_line = todo#line#new(a:string, a:line.linenr)
-        let a:line.value = new_line.value
-        let a:line.indent = new_line.indent
-        let a:line.kind = new_line.kind
-        let a:line.status = new_line.status
-        let a:line.marker = new_line.marker
-    endif
+        " If it isn't a 0 indent line it means it has a parent
+        if line.indent != 0
+            let line.parent = line_indents[line.indent - 1][-1].linenr
+            let line_indents[line.indent - 1][-1].children += [line]
+            let line_indents[line.indent  -1][-1].num_children += 1
+        endif
+
+        " Update the indent to match the current line's
+        let indent = line.indent
+    endfor
+
+    " Return all entries in the 0 indent key
+    return line_indents[0]
 endfunction
 
 function! todo#line#draw(line)
-    if todo#line#valid(a:line)
+    if <SID>Valid(a:line)
         if a:line.kind !=? 'other' && a:line.kind !=? 'empty' && a:line.indent == 0 && a:line.linenr != 1
             call setline(a:line.linenr - 1, "")
         endif
         call setline(a:line.linenr, a:line.value)
-        if todo#line#has_children(a:line)
+        if a:line.num_children > 0
             for child in a:line.children
                 call todo#line#draw(child)
             endfor
@@ -153,20 +92,29 @@ function! todo#line#draw(line)
     endif
 endfunction
 
-function! todo#line#compare(line_a, line_b)
-    " Validate if both are lines
-    if !todo#line#valid(a:line_b)
-        return v:false
-    endif
-    if !todo#line#valid(a:line_a)
-        return v:true
-    endif
+function! todo#line#sort(lines)
+    " Recurse down first
+    for line in a:lines
+        if line.num_children > 0
+            call todo#line#sort(line.children)
+        endif
+    endfor
 
-    " Validate if any of them are comments
-    if todo#util#is_comment(a:line_a.value) || todo#util#is_comment(a:line_b.value)
-        return v:false
-    endif
+    let changed = v:true
+    while changed
+        let changed = v:false
+        for i in range(len(a:lines)-1)
+            if <SID>Compare(a:lines[i], a:lines[i+1])
+                let next = <SID>UpdateLinenr(a:lines[i+1], a:lines[i].linenr)
+                call <SID>UpdateLinenr(a:lines[i], next)
+                let [a:lines[i], a:lines[i+1]] = [a:lines[i+1], a:lines[i]]
+                let changed = v:true
+            endif
+        endfor
+    endwhile
+endfunction
 
+function! s:Compare(line_a, line_b)
     " Validate status
     if a:line_a.status != a:line_b.status
         return a:line_b.status
@@ -183,14 +131,14 @@ function! todo#line#compare(line_a, line_b)
     endif
 endfunction
 
-function! todo#line#valid(line)
+function! s:Valid(line)
    if type(a:line) != v:t_dict
        return v:false
    endif
    return has_key(a:line, '__struct__') && a:line.__struct__ ==? 'line'
 endfunction
 
-function! todo#line#update_linenr(lines, start)
+function! s:UpdateLinenr(lines, start)
     let curr = a:start
     if type(a:lines) == v:t_list
         for line in a:lines
@@ -199,52 +147,26 @@ function! todo#line#update_linenr(lines, start)
             endif
             let line.linenr = curr
             let curr += 1
-            if todo#line#has_children(line)
-                let curr = todo#line#update_linenr(line.children, curr)
-                " let curr += line.num_children
+            if line.num_children > 0
+                let curr = <SID>UpdateLinenr(line.children, curr)
             endif
         endfor
     else
         let a:lines.linenr = curr
         let curr += 1
-        if todo#line#has_children(a:lines)
-            let curr = todo#line#update_linenr(a:lines.children, curr)
-            " let curr += a:lines.num_children
+        if line.num_children > 0
+            let curr = <SID>UpdateLinenr(a:lines.children, curr)
         endif
     endif
 
     return curr
 endfunction
 
-function! todo#line#sort(lines)
-    " Recurse down first
-    for line in a:lines
-        if todo#line#has_children(line)
-            call todo#line#sort(line.children)
-        endif
-    endfor
-
-    let changed = v:true
-    while changed
-        let changed = v:false
-        for i in range(len(a:lines)-1)
-            if todo#line#compare(a:lines[i], a:lines[i+1])
-                " call todo#line#update_linenr(a:lines[i+1], a:lines[i].linenr)
-                " call todo#line#update_linenr(a:lines[i], a:lines[i+1].linenr + a:lines[i+1].num_children + 1)
-                let next = todo#line#update_linenr(a:lines[i+1], a:lines[i].linenr)
-                call todo#line#update_linenr(a:lines[i], next)
-                let [a:lines[i], a:lines[i+1]] = [a:lines[i+1], a:lines[i]]
-                let changed = v:true
-            endif
-        endfor
-    endwhile
-endfunction
-
-function! todo#line#print(lines)
+function! s:Debug(lines)
     let line_length = 80
     if type(a:lines) == v:t_list
         for line in a:lines
-            call todo#line#print(line)
+            call <SID>Debug(line)
         endfor
     else
         let line = a:lines
@@ -259,10 +181,10 @@ function! todo#line#print(lines)
         let l += [linestatus]
         let linekind = "| Kind    : " . line.kind
         let l += [linekind]
-        let linemarker = "| Marker  : " . "Start: " . line.marker.start . ", End: " . line.marker.end . ", Value: " . line.marker.value
-        let l += [linemarker]
         let linechildren = "| Children: " . line.num_children
         let l += [linechildren]
+        let lineparent = "| Parent  : " . line.parent
+        let l += [lineparent]
 
         echom repeat(" ", line.indent * 4) . repeat('-', line_length)
         for v in l
@@ -275,8 +197,8 @@ function! todo#line#print(lines)
             endif
             echom repeat(" ", line.indent * 4) . out
         endfor
-        if todo#line#has_children(line)
-            call todo#line#print(line.children)
+        if line.num_children > 0
+            call <SID>Debug(line.children)
         endif
     endif
 endfunction
