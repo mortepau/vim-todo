@@ -5,102 +5,160 @@ endif
 let s:save_cpo = &cpo
 set cpo&vim
 
-let s:todo_default_keymap = {
-    \ 'indent': "\<TAB>",
-    \ 'outdent': "\<S-TAB>",
-    \ 'open_below': "o",
-    \ 'open_above': "O",
-    \ 'complete': "\<CR>",
-    \ 'new_line': "\<CR>",
-    \ 'sort': "R",
-    \ }
-let s:todo_default_next_state = {
-    \ "completion": {
-        \ " ": "/",
-        \ "/": "x",
-        \ "x": " ",
-        \ "( )": "(/)",
-        \ "(/)": "x",
-        \ "(x)": "( )",
-        \ },
-    \ "status": {
-        \ " ": "( )",
-        \ "/": "(/)",
-        \ "x": "x",
-        \ "( )": " ",
-        \ "(/)": "/",
-        \ "(x)": "x",
-        \ },
-    \ }
-let s:todo_default_conversion = {
-    \ 'integer': {
-        \ 4: 'closed',
-        \ 3: 'partial',
-        \ 2: 'open',
-        \ 1: 'comment',
-        \ 0: 'header',
-        \ -1: 'default',
-        \ },
-    \ 'completion': {
-        \ 'closed': 4,
-        \ 'partial': 3,
-        \ 'open': 2,
-        \ 'comment': 1,
-        \ 'header': 0,
-        \ 'default': -1,
-        \ },
-    \ 'marker': {
-            \ 'closed': 'x',
-            \ 'partial': '/',
-            \ 'open': ' ',
-            \ 'comment': '',
-            \ 'header': '',
-            \ 'default': '',
-        \ }
-    \ }
+" Add partial to the allowed completion states
+let g:todo_enable_partial_completion = get(g:, 'todo_enable_partial_completion', v:true)
 
-if !has_key(g:, 'todo_keymap')
-    let g:todo_keymap = s:todo_default_keymap
+" Add active as a possible co-status, i.e. a task can be open and active at the same time
+let g:todo_enable_active_status = get(g:, 'todo_enable_active_status', v:true)
+
+" Auto-sort tasks on change
+let g:todo_enable_auto_sort = get(g:, 'todo_enable_auto_sort', v:true)
+
+" Enable virtual text showing percentage completion ++
+let g:todo_enable_virtual_text = get(g:, 'todo_enable_virtual_text', v:true)
+
+" Add percentage completion to all entries
+let g:todo_enable_percentage_completion = get(g:, 'todo_enable_percentage_completion', v:true)
+
+" Add creation date to all entries
+let g:todo_enable_creation_date = get(g:, 'todo_enable_creation_date', v:true)
+
+" Add last updated date to all entries
+let g:todo_enable_update_date = get(g:, 'todo_enable_update_date', v:true)
+
+" Update task completion automatically based on parent and/or children
+let g:todo_auto_update_tasks = get(g:, 'todo_auto_update_tasks', v:true)
+
+" Update virtual text automatically on changes
+let g:todo_auto_update_virtual_text = get(g:, 'todo_auto_update_virtual_text', v:true)
+
+" Create mappings
+let g:todo_enable_default_bindings = get(g:, 'todo_enable_default_bindings', v:true)
+
+" Word to write to create a new task inline
+let g:todo_inline_template = get(g:, 'todo_inline_template', 'new')
+
+" In which order to sort keys
+let s:default_values = []
+if g:todo_enable_active_status
+    let s:default_values += ['active']
+endif
+if g:todo_enable_partial_completion
+    let s:default_values += ['open', 'partial', 'closed']
 else
-    call extend(g:todo_keymap, s:todo_default_keymap, "keep")
+    let s:default_values += ['open', 'closed']
 endif
-
-if !has_key(g:, 'todo_next_state')
-    let g:todo_next_state = {}
-endif
-
-if has_key(g:todo_next_state, 'completion')
-    call extend(g:todo_next_state.completion, s:todo_default_next_state.completion, "keep")
-else 
-    let g:todo_next_state.completion = s:todo_default_next_state.completion
-endif
-
-if has_key(g:todo_next_state, 'status')
-    call extend(g:todo_next_state.status, s:todo_default_next_state.status, "keep")
+if exists('g:todo_sorting_priority')
+    let s:valid_keys = ['open', 'closed']
+    if g:todo_enable_partial_completion
+        let s:valid_keys += ['partial']
+    endif
+    if g:todo_enable_active_status
+        let s:valid_keys += ['active']
+    endif
+    if type(g:todo_sorting_priority) == v:t_list
+        for key in g:todo_sorting_priority
+            if index(s:valid_keys, key) == -1
+                echoerr "vim-todo: Invalid key in g:todo_sorting_priority: " . key . ". Valid keys are: " . string(s:valid_keys) . "."
+                call filter(g:todo_sorting_priority, 'v:val != ' . key)
+            endif
+        endfor
+    else
+        echoerr "vim-todo: Invalid type, g:todo_sorting_priority must be a List."
+    endif
+    call extend(g:todo_sorting_priority, s:default_values, 'keep')
 else
-    let g:todo_next_state.status = s:todo_default_next_state.status
+    let g:todo_sorting_priority = s:default_values
 endif
 
-if !has_key(g:, 'todo_conversion_table')
-    let g:todo_conversion_table = {}
+" How the different task templates look
+let s:default_values = {
+    \ 'open': '[ ] - ',
+    \ 'closed': '[X] - ',
+\ }
+if g:todo_enable_partial_completion
+    call extend(s:default_values, {'partial': '[/] - '})
 endif
-
-if has_key(g:todo_conversion_table, 'completion')
-    call extend(g:todo_conversion_table.completion, s:todo_default_conversion.completion, "keep")
+if g:todo_enable_active_status
+    call extend(s:default_values, {'active': '!'})
+endif
+if exists('g:todo_completion_templates')
+    let s:valid_keys = ['open', 'closed']
+    if g:todo_enable_partial_completion
+        let s:valid_keys += ['partial']
+    endif
+    if g:todo_enable_active_status
+        let s:valid_keys += ['active']
+    endif
+    if type(g:todo_completion_templates) == v:t_dict
+        for key in keys(g:todo_completion_templates)
+            if index(s:valid_keys, key) == -1
+                echoerr "vim-todo: Invalid key in g:todo_completion_templates: " . key . ". Valid keys are: " . string(s:valid_keys) . "."
+                call filter(g:todo_completion_templates, 'v:key != ' . key)
+            endif
+        endfor
+    else
+        echoerr "vim-todo: Invalid type, g:todo_completion_templates must be a Dict."
+    endif
+    call extend(g:todo_completion_templates, s:default_values, 'keep')
 else
-    let g:todo_conversion_table.completion = s:todo_default_conversion.completion
+    let g:todo_completion_templates = s:default_values
 endif
 
-if has_key(g:todo_conversion_table, 'integer')
-    call extend(g:todo_conversion_table.integer, s:todo_default_conversion.integer, "keep")
+let s:default_values = {
+    \ 'open': 'Ignore',
+    \ 'closed': 'Comment',
+    \ 'header': 'Statement',
+\ }
+if g:todo_enable_partial_completion
+    call extend(s:default_values, {'partial': 'Type'})
+endif
+if g:todo_enable_active_status
+    call extend(s:default_values, {'active': 'Identifier'})
+endif
+if exists('g:todo_task_colors')
+    let s:valid_keys = ['open', 'closed', 'header']
+    if g:todo_enable_partial_completion
+        let s:valid_keys += ['partial']
+    endif
+    if g:todo_enable_active_status
+        let s:valid_keys += ['active']
+    endif
+    if type(g:todo_task_colors) == v:t_dict
+        for key in keys(g:todo_task_colors)
+            if index(s:valid_keys, key) == -1
+                echoerr "vim-todo: Invalid key in g:todo_task_colors: " . key . ". Valid keys are: " . string(s:valid_keys) . "."
+                call filter(g:todo_task_colors, 'v:key != ' . key)
+            endif
+        endfor
+    else
+        echoerr "vim-todo: Invalid type, g:todo_task_colors must be a Dict."
+    endif
+    call extend(g:todo_task_colors, s:default_values, 'keep')
 else
-    let g:todo_conversion_table.integer = s:todo_default_conversion.integer
+    let g:todo_task_colors = s:default_values
 endif
 
-if has_key(g:todo_conversion_table, 'marker')
-    call extend(g:todo_conversion_table.marker, s:todo_default_conversion.marker, "keep")
+let s:default_values = {
+    \ 'red': 'DarkRed',
+    \ 'yellow': 'DarkYellow',
+    \ 'green': 'DarkGreen',
+\ }
+if exists('g:todo_virtual_text_colors')
+    let s:valid_keys = ['red', 'yellow', 'green']
+    if type(g:todo_virtual_text_colors) == v:t_dict
+        for key in keys(g:todo_virtual_text_colors)
+            if index(s:valid_keys, key) == -1
+                echoerr "vim-todo: Invalid key in g:todo_virtual_text_colors: " . key . ". Valid keys are: " . string(s:valid_keys) . "."
+                call filter(g:todo_virtual_text_colors, 'v:key != ' . key)
+            endif
+        endfor
+    else
+        echoerr "vim-todo: Invalid type, g:todo_virtual_text_colors must be a Dict."
+    endif
+    call extend(g:todo_virtual_text_colors, s:default_values, 'keep')
 else
-    let g:todo_conversion_table.marker = s:todo_default_conversion.marker
+    let g:todo_virtual_text_colors = s:default_values
 endif
 
 let &cpo = s:save_cpo
