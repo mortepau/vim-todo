@@ -490,7 +490,7 @@ function! s:update_percentage_completion()
                 endif
             endif
             let text = "(" . p. "%) "
-            if p < 50
+            if p < 33
                 let hl = 'TodoRed'
             elseif p < 80
                 let hl = 'TodoYellow'

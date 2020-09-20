@@ -143,9 +143,11 @@ let s:default_values = {
     \ 'red': 'DarkRed',
     \ 'yellow': 'DarkYellow',
     \ 'green': 'DarkGreen',
+    \ 'creation': 'DarkBlue',
+    \ 'update': 'DarkCyan',
 \ }
 if exists('g:todo_virtual_text_colors')
-    let s:valid_keys = ['red', 'yellow', 'green']
+    let s:valid_keys = ['red', 'yellow', 'green', 'creation', 'update']
     if type(g:todo_virtual_text_colors) == v:t_dict
         for key in keys(g:todo_virtual_text_colors)
             if index(s:valid_keys, key) == -1

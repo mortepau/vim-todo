@@ -1,7 +1,7 @@
 " Todo syntax file
 " Language:   todo
 " Maintainer: Morten Paulsen <morten.p96@gmail.com>
-" Last Change: 2020 Aug 26
+" Last Change: 2020 Sept 20
 
 if !exists("main_syntax")
     if exists("b:current_syntax")
@@ -17,6 +17,8 @@ if g:todo_enable_virtual_text
     execute("highlight todoRed guifg=" . g:todo_virtual_text_colors.red . " ctermfg=" . g:todo_virtual_text_colors.red)
     execute("highlight todoYellow guifg=" . g:todo_virtual_text_colors.yellow . " ctermfg=" . g:todo_virtual_text_colors.yellow)
     execute("highlight todoGreen guifg=" . g:todo_virtual_text_colors.green . " ctermfg=" . g:todo_virtual_text_colors.green)
+    execute("highlight todoCreate guifg=" . g:todo_virtual_text_colors.creation . " ctermfg=" . g:todo_virtual_text_colors.creation)
+    execute("highlight todoUpdate guifg=" . g:todo_virtual_text_colors.update . " ctermfg=" . g:todo_virtual_text_colors.update)
 endif
 
 execute("syntax match todoTickOpen '^\\s*\\zs\\V" . g:todo_completion_templates.open . "\\ze' conceal")
