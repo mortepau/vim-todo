@@ -469,6 +469,7 @@ endfunction
 function! TodoInitialize()
     let s:todo_ns_hl = nvim_create_namespace('TodoHighlight')
     let s:todo_ns_vt = nvim_create_namespace('TodoVirtualText')
+    call <SID>TodoSetOrphanStatus()
 endfunction
 
 function! s:TodoSetVirtualPercentage()
