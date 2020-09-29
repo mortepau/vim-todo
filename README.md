@@ -501,6 +501,12 @@ Enables the automatic sorting of `tasks` after an update.
 
 Default: `v:true`
 
+### g:todo_enable_conceal
+
+Enables concealing of `task template`.
+
+Default: `v:true`
+
 ### g:todo_enable_creation_date
 
 Enables showing the creation time of each `task`.
