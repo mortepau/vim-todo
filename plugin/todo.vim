@@ -14,6 +14,9 @@ let g:todo_enable_active_status = get(g:, 'todo_enable_active_status', v:true)
 " Auto-sort tasks on change
 let g:todo_enable_auto_sort = get(g:, 'todo_enable_auto_sort', v:true)
 
+" Enable conceal feature
+let g:todo_enable_conecal = get(g:, 'todo_enable_conceal', v:true)
+
 " Enable virtual text showing percentage completion ++
 let g:todo_enable_virtual_text = get(g:, 'todo_enable_virtual_text', v:true)
 
@@ -25,6 +28,9 @@ let g:todo_enable_creation_date = get(g:, 'todo_enable_creation_date', v:true)
 
 " Add last updated date to all entries
 let g:todo_enable_update_date = get(g:, 'todo_enable_update_date', v:true)
+
+" Date format to use
+let g:todo_date_format = get(g:, 'todo_date_format', "%d %h. %Y %H:%M")
 
 " Update task completion automatically based on parent and/or children
 let g:todo_auto_update_tasks = get(g:, 'todo_auto_update_tasks', v:true)
@@ -39,23 +45,9 @@ let g:todo_enable_default_bindings = get(g:, 'todo_enable_default_bindings', v:t
 let g:todo_inline_template = get(g:, 'todo_inline_template', 'new')
 
 " In which order to sort keys
-let s:default_values = []
-if g:todo_enable_active_status
-    let s:default_values += ['active']
-endif
-if g:todo_enable_partial_completion
-    let s:default_values += ['open', 'partial', 'closed']
-else
-    let s:default_values += ['open', 'closed']
-endif
+let s:default_values = ['active', 'open', 'partial', 'closed']
 if exists('g:todo_sorting_priority')
-    let s:valid_keys = ['open', 'closed']
-    if g:todo_enable_partial_completion
-        let s:valid_keys += ['partial']
-    endif
-    if g:todo_enable_active_status
-        let s:valid_keys += ['active']
-    endif
+    let s:valid_keys = ['open', 'closed', 'partial', 'active']
     if type(g:todo_sorting_priority) == v:t_list
         for key in g:todo_sorting_priority
             if index(s:valid_keys, key) == -1
@@ -75,21 +67,11 @@ endif
 let s:default_values = {
     \ 'open': '[ ] - ',
     \ 'closed': '[X] - ',
+    \ 'partial': '[/] - ',
+    \ 'active': '!',
 \ }
-if g:todo_enable_partial_completion
-    call extend(s:default_values, {'partial': '[/] - '})
-endif
-if g:todo_enable_active_status
-    call extend(s:default_values, {'active': '!'})
-endif
 if exists('g:todo_completion_templates')
-    let s:valid_keys = ['open', 'closed']
-    if g:todo_enable_partial_completion
-        let s:valid_keys += ['partial']
-    endif
-    if g:todo_enable_active_status
-        let s:valid_keys += ['active']
-    endif
+    let s:valid_keys = ['open', 'closed', 'partial', 'active']
     if type(g:todo_completion_templates) == v:t_dict
         for key in keys(g:todo_completion_templates)
             if index(s:valid_keys, key) == -1
@@ -109,21 +91,11 @@ let s:default_values = {
     \ 'open': 'Ignore',
     \ 'closed': 'Comment',
     \ 'header': 'Statement',
+    \ 'partial': 'Type',
+    \ 'active': 'Identifier',
 \ }
-if g:todo_enable_partial_completion
-    call extend(s:default_values, {'partial': 'Type'})
-endif
-if g:todo_enable_active_status
-    call extend(s:default_values, {'active': 'Identifier'})
-endif
 if exists('g:todo_task_colors')
-    let s:valid_keys = ['open', 'closed', 'header']
-    if g:todo_enable_partial_completion
-        let s:valid_keys += ['partial']
-    endif
-    if g:todo_enable_active_status
-        let s:valid_keys += ['active']
-    endif
+    let s:valid_keys = ['open', 'closed', 'header', 'partial', 'active']
     if type(g:todo_task_colors) == v:t_dict
         for key in keys(g:todo_task_colors)
             if index(s:valid_keys, key) == -1
@@ -140,14 +112,54 @@ else
 endif
 
 let s:default_values = {
+    \ 'creation': 'Define',
+    \ 'update': 'Keyword',
+\ }
+if exists('g:todo_date_colors')
+    let s:valid_keys = ['creation', 'update']
+    if type(g:todo_date_colors) == v:t_dict
+        for key in keys(g:todo_date_colors)
+            if index(s:valid_keys, key) == -1
+                echoerr "vim-todo: Invalid key in g:todo_date_colors: " . key . ". Valid keys are: " . string(s:valid_keys) . "."
+                call filter(g:todo_date_colors, 'v:key != ' . key)
+            endif
+        endfor
+    else
+        echoerr "vim-todo: Invalid type, g:todo_date_colors must be a Dict."
+    endif
+    call extend(g:todo_date_colors, s:default_values, 'keep')
+else
+    let g:todo_date_colors = s:default_values
+endif
+
+let s:default_values = {
+    \ 'creation': '  (Created: %s)',
+    \ 'update': '  (Updated: %s)',
+\ }
+if exists('g:todo_date_templates')
+    let s:valid_keys = ['creation', 'update']
+    if type(g:todo_date_templates) == v:t_dict
+        for key in keys(g:todo_date_templates)
+            if index(s:valid_keys, key) == -1
+                echoerr "vim-todo: Invalid key in g:todo_date_templates: " . key . ". Valid keys are: " . string(s:valid_keys) . "."
+                call filter(g:todo_date_templates, 'v:key != ' . key)
+            endif
+        endfor
+    else
+        echoerr "vim-todo: Invalid type, g:todo_date_templates must be a Dict."
+    endif
+    call extend(g:todo_date_templates, s:default_values, 'keep')
+else
+    let g:todo_date_templates = s:default_values
+endif
+
+let s:default_values = {
     \ 'red': 'DarkRed',
     \ 'yellow': 'DarkYellow',
     \ 'green': 'DarkGreen',
-    \ 'creation': 'DarkBlue',
-    \ 'update': 'DarkCyan',
 \ }
 if exists('g:todo_virtual_text_colors')
-    let s:valid_keys = ['red', 'yellow', 'green', 'creation', 'update']
+    let s:valid_keys = ['red', 'yellow', 'green']
     if type(g:todo_virtual_text_colors) == v:t_dict
         for key in keys(g:todo_virtual_text_colors)
             if index(s:valid_keys, key) == -1
