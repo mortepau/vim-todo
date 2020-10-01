@@ -15,10 +15,13 @@ let g:todo_enable_active_status = get(g:, 'todo_enable_active_status', v:true)
 let g:todo_enable_auto_sort = get(g:, 'todo_enable_auto_sort', v:true)
 
 " Enable conceal feature
-let g:todo_enable_conecal = get(g:, 'todo_enable_conceal', v:true)
+let g:todo_enable_conceal = get(g:, 'todo_enable_conceal', v:true)
 
 " Enable virtual text showing percentage completion ++
 let g:todo_enable_virtual_text = get(g:, 'todo_enable_virtual_text', v:true)
+
+" Enable highlighting of orphans
+let g:todo_enable_orphan_highlight = get(g:, 'todo_enable_orphan_highlight', v:true)
 
 " Add percentage completion to all entries
 let g:todo_enable_percentage_completion = get(g:, 'todo_enable_percentage_completion', v:true)
@@ -31,6 +34,9 @@ let g:todo_enable_update_date = get(g:, 'todo_enable_update_date', v:true)
 
 " Date format to use
 let g:todo_date_format = get(g:, 'todo_date_format', "%d %h. %Y %H:%M")
+
+" Indent date based on max width among header children
+let g:todo_date_indent_header = get(g:, 'todo_date_indent_header', v:true)
 
 " Update task completion automatically based on parent and/or children
 let g:todo_auto_update_tasks = get(g:, 'todo_auto_update_tasks', v:true)
@@ -85,6 +91,29 @@ if exists('g:todo_completion_templates')
     call extend(g:todo_completion_templates, s:default_values, 'keep')
 else
     let g:todo_completion_templates = s:default_values
+endif
+
+let s:default_values = {
+    \ 'open': 'o',
+    \ 'closed': 'c',
+    \ 'partial': 'p',
+    \ 'active': 'a',
+\ }
+if exists('g:todo_task_cchar')
+    let s:valid_keys = ['open', 'closed', 'partial', 'active']
+    if type(g:todo_task_cchar) == v:t_dict
+        for key in keys(g:todo_task_cchar)
+            if index(s:valid_keys, key) == -1
+                echoerr "vim-todo: Invalid key in g:todo_task_cchar: " . key . ". Valid keys are: " . string(s:valid_keys) . "."
+                call filter(g:todo_task_cchar, 'v:key != ' . key)
+            endif
+        endfor
+    else
+        echoerr "vim-todo: Invalid type, g:todo_task_cchar must be a Dict."
+    endif
+    call extend(g:todo_task_cchar, s:default_values, 'keep')
+else
+    let g:todo_task_cchar = s:default_values
 endif
 
 let s:default_values = {
